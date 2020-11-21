@@ -9,48 +9,45 @@ let
   ) {
     inherit pkgs;
   };
+  easy-purescript-nix = pkgs: import (
+    pkgs.fetchFromGitHub {
+      owner = "justinwoo";
+      repo = "easy-purescript-nix";
+      rev = "1ec689df0adf8e8ada7fcfcb513876307ea34226";
+      sha256 = "12hk2zbjkrq2i5fs6xb3x254lnhm9fzkcxph0a7ngxyzfykvf4hi";
+    }
+  ) {
+    inherit pkgs;
+  };
 
 in
 { pkgs ? import <nixpkgs> {}
 , dhall-json ? (easy-dhall-nix pkgs).dhall-json-simple
+, spago ? (easy-purescript-nix pkgs).spago
 , nodejs ? pkgs.nodejs-10_x
 }:
+pkgs.stdenv.mkDerivation {
+  name = "spago2nix";
 
-  let
-    easy-purescript-nix = import (
-      pkgs.fetchFromGitHub {
-        owner = "justinwoo";
-        repo = "easy-purescript-nix";
-        rev = "1ec689df0adf8e8ada7fcfcb513876307ea34226";
-        sha256 = "12hk2zbjkrq2i5fs6xb3x254lnhm9fzkcxph0a7ngxyzfykvf4hi";
-      }
-    ) {
-      inherit pkgs;
-    };
+  src = pkgs.nix-gitignore.gitignoreSource [ ".git" ] ./.;
 
-  in
-    pkgs.stdenv.mkDerivation {
-      name = "spago2nix";
+  buildInputs = [ pkgs.makeWrapper ];
 
-      src = pkgs.nix-gitignore.gitignoreSource [ ".git" ] ./.;
+  installPhase = ''
+    mkdir -p $out/bin
+    target=$out/bin/spago2nix
 
-      buildInputs = [ pkgs.makeWrapper ];
+    >>$target echo '#!${nodejs}/bin/node'
+    >>$target echo "require('$src/bin/output.js')";
 
-      installPhase = ''
-        mkdir -p $out/bin
-        target=$out/bin/spago2nix
+    chmod +x $target
 
-        >>$target echo '#!${nodejs}/bin/node'
-        >>$target echo "require('$src/bin/output.js')";
-
-        chmod +x $target
-
-        wrapProgram $target \
-          --prefix PATH : ${pkgs.lib.makeBinPath [
-        pkgs.coreutils
-        pkgs.nix-prefetch-git
-        easy-purescript-nix.spago
-        dhall-json
-      ]}
-      '';
-    }
+    wrapProgram $target \
+      --prefix PATH : ${pkgs.lib.makeBinPath [
+    pkgs.coreutils
+    pkgs.nix-prefetch-git
+    spago
+    dhall-json
+  ]}
+  '';
+}
